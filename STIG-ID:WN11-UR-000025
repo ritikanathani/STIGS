@@ -1,0 +1,148 @@
+<#
+.SYNOPSIS
+    This PowerShell script ensures that the "Allow log on locally" user right is assigned only to the Administrators and Users groups on Windows 11 systems.
+
+.DESCRIPTION
+    Restricting the "Allow log on locally" user right to only Administrators and Users limits interactive sign-in access to authorized principals. This reduces the risk of unauthorized local access and supports compliance with Windows 11 STIG requirements.
+
+.NOTES
+    Author          : Ritika Nathani
+    Version         : 1.0
+    CVEs            : N/A
+    Plugin IDs      : N/A
+    STIG-ID         : WN11-UR-000025
+
+.TESTED ON
+    Date(s) Tested  : 04-07-2026
+    Tested By       : Ritika Nathani
+    Systems Tested  : Windows 11
+    PowerShell Ver. : 5.1+
+
+.USAGE
+    Run this script in an elevated PowerShell session.
+    Example:
+    PS C:\> .\STIG-ID-WN11-UR-000025.ps1
+#>
+
+# ================================
+# ADMIN PRIVILEGE CHECK
+# ================================
+
+if (-not ([Security.Principal.WindowsPrincipal] `
+[Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
+[Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Write-Host "Please run this script as Administrator." -ForegroundColor Red
+    exit
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# PRE-REMEDIATION CHECK
+# ================================
+
+Write-Host "Checking 'Allow log on locally' user right assignment..."
+
+$verifyPath = "C:\secpol_verify.cfg"
+secedit /export /cfg $verifyPath | Out-Null
+
+if (-not (Test-Path $verifyPath)) {
+    Write-Host "Failed to export local security policy for verification." -ForegroundColor Red
+    exit
+}
+
+$verifyContent = Get-Content $verifyPath
+$interactiveLogonLine = $verifyContent | Select-String "^SeInteractiveLogonRight\s*="
+
+if (-not $interactiveLogonLine) {
+    Write-Host "Current SeInteractiveLogonRight: Not Set"
+    $currentValue = ""
+} else {
+    $currentValue = ($interactiveLogonLine -split "=")[1].Trim()
+    Write-Host "Current SeInteractiveLogonRight:" $currentValue
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# REMEDIATION
+# ================================
+
+Write-Host "Configuring 'Allow log on locally' user right..."
+
+$configPath = "C:\secpol.cfg"
+$requiredValue = "SeInteractiveLogonRight = *S-1-5-32-544,*S-1-5-32-545"
+
+secedit /export /cfg $configPath | Out-Null
+
+if (-not (Test-Path $configPath)) {
+    Write-Host "Failed to export local security policy for remediation." -ForegroundColor Red
+    exit
+}
+
+$configContent = Get-Content $configPath
+
+if ($configContent -match "^SeInteractiveLogonRight\s*=") {
+    $configContent = $configContent -replace "^SeInteractiveLogonRight\s*=.*", $requiredValue
+} else {
+    $privilegeRightsIndex = $configContent.IndexOf("[Privilege Rights]")
+    if ($privilegeRightsIndex -ge 0) {
+        $insertIndex = $privilegeRightsIndex + 1
+        $before = $configContent[0..$insertIndex]
+        $after = $configContent[($insertIndex + 1)..($configContent.Count - 1)]
+        $configContent = $before + $requiredValue + $after
+    } else {
+        $configContent += ""
+        $configContent += "[Privilege Rights]"
+        $configContent += $requiredValue
+    }
+}
+
+$configContent | Set-Content $configPath
+
+secedit /configure /db secedit.sdb /cfg $configPath /areas USER_RIGHTS | Out-Null
+
+Write-Host "----------------------------------------"
+
+# ================================
+# POST-REMEDIATION VERIFICATION
+# ================================
+
+Write-Host "Verifying configuration..."
+
+secedit /export /cfg $verifyPath | Out-Null
+
+$updatedVerifyContent = Get-Content $verifyPath
+$updatedInteractiveLogonLine = $updatedVerifyContent | Select-String "^SeInteractiveLogonRight\s*="
+
+if (-not $updatedInteractiveLogonLine) {
+    Write-Host "Updated SeInteractiveLogonRight: Not Set"
+    $updatedValue = ""
+} else {
+    $updatedValue = ($updatedInteractiveLogonLine -split "=")[1].Trim()
+    Write-Host "Updated SeInteractiveLogonRight:" $updatedValue
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# RESULT
+# ================================
+
+if ($updatedValue -eq "*S-1-5-32-544,*S-1-5-32-545") {
+    Write-Host "[COMPLIANT] 'Allow log on locally' is assigned only to Administrators and Users." -ForegroundColor Green
+} else {
+    Write-Host "[NON-COMPLIANT] 'Allow log on locally' is not properly configured." -ForegroundColor Red
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# NOTES
+# ================================
+
+Write-Host "Note:"
+Write-Host "- S-1-5-32-544 represents the Administrators group."
+Write-Host "- S-1-5-32-545 represents the Users group."
+Write-Host "- Additional assignments such as Guest or Backup Operators are non-compliant."
+Write-Host "- In managed environments, Group Policy may override local settings."
