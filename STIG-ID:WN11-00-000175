@@ -1,0 +1,78 @@
+<#
+.SYNOPSIS
+    This PowerShell script ensures that the Secondary Logon service (seclogon) is disabled on Windows 11 systems.
+
+.DESCRIPTION
+    Disabling the Secondary Logon service prevents users from launching processes using alternate credentials.
+    This reduces the risk of privilege escalation and credential misuse.
+
+.NOTES
+    Author          : Ritika Nathani
+    Version         : 1.0
+    CVEs            : N/A
+    Plugin IDs      : N/A
+    STIG-ID         : WN11-00-000175
+
+.TESTED ON
+    Date(s) Tested  : 04-07-2026
+    Tested By       : Ritika Nathani
+    Systems Tested  : Windows 11
+    PowerShell Ver. : 5.1+
+
+.USAGE
+    Run this script in an elevated PowerShell session.
+    Example:
+    PS C:\> .\STIG-ID-WN11-00-000175.ps1
+#>
+
+# ================================
+# PRE-REMEDIATION CHECK
+# ================================
+
+Write-Host "Checking Secondary Logon service status..."
+
+$service = Get-Service -Name seclogon
+
+Write-Host "Service Name  :" $service.Name
+Write-Host "Status        :" $service.Status
+Write-Host "Startup Type  :" (Get-CimInstance Win32_Service -Filter "Name='seclogon'").StartMode
+
+# ================================
+# REMEDIATION
+# ================================
+
+Write-Host "`nDisabling Secondary Logon service..."
+
+# Set startup type to Disabled
+Set-Service -Name seclogon -StartupType Disabled
+
+# ================================
+# POST-REMEDIATION VERIFICATION
+# ================================
+
+Write-Host "`nVerifying configuration..."
+
+$updatedService = Get-Service -Name seclogon
+$startupType = (Get-CimInstance Win32_Service -Filter "Name='seclogon'").StartMode
+
+Write-Host "Service Name  :" $updatedService.Name
+Write-Host "Status        :" $updatedService.Status
+Write-Host "Startup Type  :" $startupType
+
+# ================================
+# RESULT
+# ================================
+
+if ($startupType -eq "Disabled") {
+    Write-Host "`n[COMPLIANT] Secondary Logon service is disabled."
+} else {
+    Write-Host "`n[NON-COMPLIANT] Service is not properly disabled."
+}
+
+# ================================
+# NOTES
+# ================================
+
+Write-Host "`nNote:"
+Write-Host "- Service may remain in Running state until system reboot."
+Write-Host "- A restart ensures full enforcement of this control."
