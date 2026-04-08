@@ -1,0 +1,110 @@
+<#
+.SYNOPSIS
+    This PowerShell script ensures that password history is configured to remember 24 passwords on Windows 11 systems.
+
+.DESCRIPTION
+    Configuring password history to remember the last 24 passwords prevents users from reusing recent passwords.
+    This strengthens password security and helps enforce effective password rotation practices.
+
+.NOTES
+    Author          : Ritika Nathani
+    Version         : 1.0
+    CVEs            : N/A
+    Plugin IDs      : N/A
+    STIG-ID         : WN11-AC-000020
+
+.TESTED ON
+    Date(s) Tested  : 04-07-2026
+    Tested By       : Ritika Nathani
+    Systems Tested  : Windows 11
+    PowerShell Ver. : 5.1+
+
+.USAGE
+    Run this script in an elevated PowerShell session.
+    Example:
+    PS C:\> .\STIG-ID-WN11-AC-000020.ps1
+#>
+
+# ================================
+# ADMIN PRIVILEGE CHECK
+# ================================
+
+if (-not ([Security.Principal.WindowsPrincipal] `
+[Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
+[Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Write-Host "Please run this script as Administrator." -ForegroundColor Red
+    exit
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# PRE-REMEDIATION CHECK
+# ================================
+
+Write-Host "Checking password history configuration..."
+
+$accountsOutput = net accounts
+$passwordHistoryLine = $accountsOutput | Select-String "Length of password history maintained"
+$passwordHistoryText = ($passwordHistoryLine -split ":")[1].Trim()
+
+if ($passwordHistoryText -match "None") {
+    $passwordHistory = 0
+} else {
+    $passwordHistory = [int]$passwordHistoryText
+}
+
+Write-Host "Current Password History Value:" $passwordHistory
+
+Write-Host "----------------------------------------"
+
+# ================================
+# REMEDIATION
+# ================================
+
+Write-Host "Configuring password history to remember 24 passwords..."
+
+net accounts /uniquepw:24 | Out-Null
+
+Write-Host "----------------------------------------"
+
+# ================================
+# POST-REMEDIATION VERIFICATION
+# ================================
+
+Write-Host "Verifying configuration..."
+
+$updatedAccountsOutput = net accounts
+$updatedPasswordHistoryLine = $updatedAccountsOutput | Select-String "Length of password history maintained"
+$updatedPasswordHistoryText = ($updatedPasswordHistoryLine -split ":")[1].Trim()
+
+if ($updatedPasswordHistoryText -match "None") {
+    $updatedPasswordHistory = 0
+} else {
+    $updatedPasswordHistory = [int]$updatedPasswordHistoryText
+}
+
+Write-Host "Updated Password History Value:" $updatedPasswordHistory
+
+Write-Host "----------------------------------------"
+
+# ================================
+# RESULT
+# ================================
+
+if ($updatedPasswordHistory -ge 24) {
+    Write-Host "[COMPLIANT] Password history is configured to remember 24 passwords or more." -ForegroundColor Green
+} else {
+    Write-Host "[NON-COMPLIANT] Password history is not properly configured." -ForegroundColor Red
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# NOTES
+# ================================
+
+Write-Host "Note:"
+Write-Host "- This setting works together with minimum password age and maximum password age."
+Write-Host "- A value of 0 or 'None' is non-compliant."
+Write-Host "- A Group Policy refresh may be required in managed environments."
