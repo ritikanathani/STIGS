@@ -1,0 +1,137 @@
+<#
+.SYNOPSIS
+    This PowerShell script ensures that the built-in Microsoft password complexity filter is enabled on Windows 11 systems.
+
+.DESCRIPTION
+    Enabling the Microsoft password complexity filter requires passwords to meet complexity rules, helping prevent weak and easily guessable passwords. This strengthens authentication security and supports compliance with Windows 11 STIG requirements.
+
+.NOTES
+    Author          : Ritika Nathani
+    Version         : 1.0
+    CVEs            : N/A
+    Plugin IDs      : N/A
+    STIG-ID         : WN11-AC-000040
+
+.TESTED ON
+    Date(s) Tested  : 04-07-2026
+    Tested By       : Ritika Nathani
+    Systems Tested  : Windows 11
+    PowerShell Ver. : 5.1+
+
+.USAGE
+    Run this script in an elevated PowerShell session.
+    Example:
+    PS C:\> .\STIG-ID-WN11-AC-000040.ps1
+#>
+
+# ================================
+# ADMIN PRIVILEGE CHECK
+# ================================
+
+if (-not ([Security.Principal.WindowsPrincipal] `
+[Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
+[Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Write-Host "Please run this script as Administrator." -ForegroundColor Red
+    exit
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# PRE-REMEDIATION CHECK
+# ================================
+
+Write-Host "Checking password complexity configuration..."
+
+$verifyPath = "C:\secpol_verify.cfg"
+secedit /export /cfg $verifyPath | Out-Null
+
+if (-not (Test-Path $verifyPath)) {
+    Write-Host "Failed to export local security policy for verification." -ForegroundColor Red
+    exit
+}
+
+$verifyContent = Get-Content $verifyPath
+$passwordComplexityLine = $verifyContent | Select-String "^PasswordComplexity\s*="
+$passwordComplexityText = ($passwordComplexityLine -split "=")[1].Trim()
+$passwordComplexity = [int]$passwordComplexityText
+
+Write-Host "Current Password Complexity Value:" $passwordComplexity
+
+Write-Host "----------------------------------------"
+
+# ================================
+# REMEDIATION
+# ================================
+
+Write-Host "Enabling password complexity requirement..."
+
+$configPath = "C:\secpol.cfg"
+secedit /export /cfg $configPath | Out-Null
+
+if (-not (Test-Path $configPath)) {
+    Write-Host "Failed to export local security policy for remediation." -ForegroundColor Red
+    exit
+}
+
+$configContent = Get-Content $configPath
+
+if ($configContent -match "^PasswordComplexity\s*=") {
+    $configContent = $configContent -replace "^PasswordComplexity\s*=\s*\d+", "PasswordComplexity = 1"
+} else {
+    $systemAccessIndex = $configContent.IndexOf("[System Access]")
+    if ($systemAccessIndex -ge 0) {
+        $insertIndex = $systemAccessIndex + 1
+        $before = $configContent[0..$insertIndex]
+        $after = $configContent[($insertIndex + 1)..($configContent.Count - 1)]
+        $configContent = $before + "PasswordComplexity = 1" + $after
+    } else {
+        $configContent += ""
+        $configContent += "[System Access]"
+        $configContent += "PasswordComplexity = 1"
+    }
+}
+
+$configContent | Set-Content $configPath
+
+secedit /configure /db secedit.sdb /cfg $configPath /areas SECURITYPOLICY | Out-Null
+
+Write-Host "----------------------------------------"
+
+# ================================
+# POST-REMEDIATION VERIFICATION
+# ================================
+
+Write-Host "Verifying configuration..."
+
+secedit /export /cfg $verifyPath | Out-Null
+
+$updatedVerifyContent = Get-Content $verifyPath
+$updatedPasswordComplexityLine = $updatedVerifyContent | Select-String "^PasswordComplexity\s*="
+$updatedPasswordComplexityText = ($updatedPasswordComplexityLine -split "=")[1].Trim()
+$updatedPasswordComplexity = [int]$updatedPasswordComplexityText
+
+Write-Host "Updated Password Complexity Value:" $updatedPasswordComplexity
+
+Write-Host "----------------------------------------"
+
+# ================================
+# RESULT
+# ================================
+
+if ($updatedPasswordComplexity -eq 1) {
+    Write-Host "[COMPLIANT] Password complexity is enabled." -ForegroundColor Green
+} else {
+    Write-Host "[NON-COMPLIANT] Password complexity is not properly configured." -ForegroundColor Red
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# NOTES
+# ================================
+
+Write-Host "Note:"
+Write-Host "- PasswordComplexity = 1 is the compliant setting."
+Write-Host "- This setting works together with minimum password length, password history, and minimum password age."
+Write-Host "- In managed environments, Group Policy may override local settings."
