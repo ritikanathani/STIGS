@@ -1,0 +1,96 @@
+<#
+.SYNOPSIS
+    This PowerShell script ensures that the Windows 11 account lockout duration is configured to 15 minutes or greater.
+
+.DESCRIPTION
+    Configuring the account lockout duration to at least 15 minutes helps protect the system against brute-force password attacks by keeping accounts locked for an adequate period after repeated failed logon attempts.
+
+.NOTES
+    Author          : Ritika Nathani
+    Version         : 1.0
+    CVEs            : N/A
+    Plugin IDs      : N/A
+    STIG-ID         : WN11-AC-000005
+
+.TESTED ON
+    Date(s) Tested  : 04-07-2026
+    Tested By       : Ritika Nathani
+    Systems Tested  : Windows 11
+    PowerShell Ver. : 5.1+
+
+.USAGE
+    Run this script in an elevated PowerShell session.
+    Example:
+    PS C:\> .\STIG-ID-WN11-AC-000005.ps1
+#>
+
+# ================================
+# ADMIN PRIVILEGE CHECK
+# ================================
+
+if (-not ([Security.Principal.WindowsPrincipal] `
+[Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
+[Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Write-Host "Please run this script as Administrator." -ForegroundColor Red
+    exit
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# PRE-REMEDIATION CHECK
+# ================================
+
+Write-Host "Checking account lockout duration..."
+
+$accountsOutput = net accounts
+$lockoutDurationLine = $accountsOutput | Select-String "Lockout duration"
+$lockoutDuration = [int](($lockoutDurationLine -split ":")[1].Trim())
+
+Write-Host "Current Lockout Duration (minutes):" $lockoutDuration
+
+Write-Host "----------------------------------------"
+
+# ================================
+# REMEDIATION
+# ================================
+
+Write-Host "Configuring account lockout duration to 15 minutes..."
+
+net accounts /lockoutduration:15 | Out-Null
+
+Write-Host "----------------------------------------"
+
+# ================================
+# POST-REMEDIATION VERIFICATION
+# ================================
+
+Write-Host "Verifying configuration..."
+
+$updatedAccountsOutput = net accounts
+$updatedLockoutDurationLine = $updatedAccountsOutput | Select-String "Lockout duration"
+$updatedLockoutDuration = [int](($updatedLockoutDurationLine -split ":")[1].Trim())
+
+Write-Host "Updated Lockout Duration (minutes):" $updatedLockoutDuration
+
+Write-Host "----------------------------------------"
+
+# ================================
+# RESULT
+# ================================
+
+if ($updatedLockoutDuration -ge 15) {
+    Write-Host "[COMPLIANT] Account lockout duration is configured to 15 minutes or greater." -ForegroundColor Green
+} else {
+    Write-Host "[NON-COMPLIANT] Account lockout duration is not properly configured." -ForegroundColor Red
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# NOTES
+# ================================
+
+Write-Host "Note:"
+Write-Host "- This setting works with the account lockout threshold and lockout observation window."
+Write-Host "- A Group Policy refresh may be required in managed environments."
