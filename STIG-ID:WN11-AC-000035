@@ -1,0 +1,97 @@
+<#
+.SYNOPSIS
+    This PowerShell script ensures that the minimum password length is configured to 14 characters on Windows 11 systems.
+
+.DESCRIPTION
+    Configuring a minimum password length of 14 characters strengthens authentication security by making passwords more resistant to brute-force and dictionary attacks.
+
+.NOTES
+    Author          : Ritika Nathani
+    Version         : 1.0
+    CVEs            : N/A
+    Plugin IDs      : N/A
+    STIG-ID         : WN11-AC-000035
+
+.TESTED ON
+    Date(s) Tested  : 04-07-2026
+    Tested By       : Ritika Nathani
+    Systems Tested  : Windows 11
+    PowerShell Ver. : 5.1+
+
+.USAGE
+    Run this script in an elevated PowerShell session.
+    Example:
+    PS C:\> .\STIG-ID-WN11-AC-000035.ps1
+#>
+
+# ================================
+# ADMIN PRIVILEGE CHECK
+# ================================
+
+if (-not ([Security.Principal.WindowsPrincipal] `
+[Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
+[Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Write-Host "Please run this script as Administrator." -ForegroundColor Red
+    exit
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# PRE-REMEDIATION CHECK
+# ================================
+
+Write-Host "Checking minimum password length..."
+
+$accountsOutput = net accounts
+$minPasswordLengthLine = $accountsOutput | Select-String "Minimum password length"
+$minPasswordLength = [int](($minPasswordLengthLine -split ":")[1].Trim())
+
+Write-Host "Current Minimum Password Length:" $minPasswordLength
+
+Write-Host "----------------------------------------"
+
+# ================================
+# REMEDIATION
+# ================================
+
+Write-Host "Configuring minimum password length to 14 characters..."
+
+net accounts /minpwlen:14 | Out-Null
+
+Write-Host "----------------------------------------"
+
+# ================================
+# POST-REMEDIATION VERIFICATION
+# ================================
+
+Write-Host "Verifying configuration..."
+
+$updatedAccountsOutput = net accounts
+$updatedMinPasswordLengthLine = $updatedAccountsOutput | Select-String "Minimum password length"
+$updatedMinPasswordLength = [int](($updatedMinPasswordLengthLine -split ":")[1].Trim())
+
+Write-Host "Updated Minimum Password Length:" $updatedMinPasswordLength
+
+Write-Host "----------------------------------------"
+
+# ================================
+# RESULT
+# ================================
+
+if ($updatedMinPasswordLength -ge 14) {
+    Write-Host "[COMPLIANT] Minimum password length is configured to 14 characters or greater." -ForegroundColor Green
+} else {
+    Write-Host "[NON-COMPLIANT] Minimum password length is not properly configured." -ForegroundColor Red
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# NOTES
+# ================================
+
+Write-Host "Note:"
+Write-Host "- This setting works together with password complexity and password history requirements."
+Write-Host "- A value below 14 is non-compliant."
+Write-Host "- A Group Policy refresh may be required in managed environments."
