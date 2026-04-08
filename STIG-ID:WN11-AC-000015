@@ -1,0 +1,99 @@
+<#
+.SYNOPSIS
+    This PowerShell script ensures that the period of time before the bad logon counter is reset
+    is configured to 15 minutes on Windows 11 systems.
+
+.DESCRIPTION
+    Configuring the lockout observation window to 15 minutes ensures that failed logon attempts
+    are tracked for an appropriate period before the counter resets. This helps mitigate
+    brute-force password attacks.
+
+.NOTES
+    Author          : Ritika Nathani
+    Version         : 1.0
+    CVEs            : N/A
+    Plugin IDs      : N/A
+    STIG-ID         : WN11-AC-000015
+
+.TESTED ON
+    Date(s) Tested  : 04-07-2026
+    Tested By       : Ritika Nathani
+    Systems Tested  : Windows 11
+    PowerShell Ver. : 5.1+
+
+.USAGE
+    Run this script in an elevated PowerShell session.
+    Example:
+    PS C:\> .\STIG-ID-WN11-AC-000015.ps1
+#>
+
+# ================================
+# ADMIN PRIVILEGE CHECK
+# ================================
+
+if (-not ([Security.Principal.WindowsPrincipal] `
+[Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
+[Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Write-Host "Please run this script as Administrator." -ForegroundColor Red
+    exit
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# PRE-REMEDIATION CHECK
+# ================================
+
+Write-Host "Checking lockout observation window..."
+
+$accountsOutput = net accounts
+$lockoutWindowLine = $accountsOutput | Select-String "Lockout observation window"
+$lockoutWindow = [int](($lockoutWindowLine -split ":")[1].Trim())
+
+Write-Host "Current Lockout Observation Window (minutes):" $lockoutWindow
+
+Write-Host "----------------------------------------"
+
+# ================================
+# REMEDIATION
+# ================================
+
+Write-Host "Configuring lockout observation window to 15 minutes..."
+
+net accounts /lockoutwindow:15 | Out-Null
+
+Write-Host "----------------------------------------"
+
+# ================================
+# POST-REMEDIATION VERIFICATION
+# ================================
+
+Write-Host "Verifying configuration..."
+
+$updatedAccountsOutput = net accounts
+$updatedLockoutWindowLine = $updatedAccountsOutput | Select-String "Lockout observation window"
+$updatedLockoutWindow = [int](($updatedLockoutWindowLine -split ":")[1].Trim())
+
+Write-Host "Updated Lockout Observation Window (minutes):" $updatedLockoutWindow
+
+Write-Host "----------------------------------------"
+
+# ================================
+# RESULT
+# ================================
+
+if ($updatedLockoutWindow -ge 15) {
+    Write-Host "[COMPLIANT] Lockout observation window is configured to 15 minutes or greater." -ForegroundColor Green
+} else {
+    Write-Host "[NON-COMPLIANT] Lockout observation window is not properly configured." -ForegroundColor Red
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# NOTES
+# ================================
+
+Write-Host "Note:"
+Write-Host "- This setting works together with account lockout threshold and lockout duration."
+Write-Host "- A Group Policy refresh may be required in managed environments."
