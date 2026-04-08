@@ -1,0 +1,109 @@
+<#
+.SYNOPSIS
+    This PowerShell script ensures that the number of allowed bad logon attempts is configured to three or less on Windows 11 systems.
+
+.DESCRIPTION
+    Configuring the account lockout threshold to three or fewer invalid logon attempts helps protect the system against brute-force password attacks by limiting repeated authentication attempts.
+
+.NOTES
+    Author          : Ritika Nathani
+    Version         : 1.0
+    CVEs            : N/A
+    Plugin IDs      : N/A
+    STIG-ID         : WN11-AC-000010
+
+.TESTED ON
+    Date(s) Tested  : 04-07-2026
+    Tested By       : Ritika Nathani
+    Systems Tested  : Windows 11
+    PowerShell Ver. : 5.1+
+
+.USAGE
+    Run this script in an elevated PowerShell session.
+    Example:
+    PS C:\> .\STIG-ID-WN11-AC-000010.ps1
+#>
+
+# ================================
+# ADMIN PRIVILEGE CHECK
+# ================================
+
+if (-not ([Security.Principal.WindowsPrincipal] `
+[Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
+[Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Write-Host "Please run this script as Administrator." -ForegroundColor Red
+    exit
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# PRE-REMEDIATION CHECK
+# ================================
+
+Write-Host "Checking account lockout threshold..."
+
+$accountsOutput = net accounts
+$lockoutThresholdLine = $accountsOutput | Select-String "Lockout threshold"
+$lockoutThresholdText = ($lockoutThresholdLine -split ":")[1].Trim()
+
+if ($lockoutThresholdText -match "Never") {
+    $lockoutThreshold = 0
+} else {
+    $lockoutThreshold = [int]$lockoutThresholdText
+}
+
+Write-Host "Current Lockout Threshold:" $lockoutThreshold
+
+Write-Host "----------------------------------------"
+
+# ================================
+# REMEDIATION
+# ================================
+
+Write-Host "Configuring account lockout threshold to 3..."
+
+net accounts /lockoutthreshold:3 | Out-Null
+
+Write-Host "----------------------------------------"
+
+# ================================
+# POST-REMEDIATION VERIFICATION
+# ================================
+
+Write-Host "Verifying configuration..."
+
+$updatedAccountsOutput = net accounts
+$updatedLockoutThresholdLine = $updatedAccountsOutput | Select-String "Lockout threshold"
+$updatedLockoutThresholdText = ($updatedLockoutThresholdLine -split ":")[1].Trim()
+
+if ($updatedLockoutThresholdText -match "Never") {
+    $updatedLockoutThreshold = 0
+} else {
+    $updatedLockoutThreshold = [int]$updatedLockoutThresholdText
+}
+
+Write-Host "Updated Lockout Threshold:" $updatedLockoutThreshold
+
+Write-Host "----------------------------------------"
+
+# ================================
+# RESULT
+# ================================
+
+if ($updatedLockoutThreshold -gt 0 -and $updatedLockoutThreshold -le 3) {
+    Write-Host "[COMPLIANT] Account lockout threshold is configured to three or fewer invalid logon attempts." -ForegroundColor Green
+} else {
+    Write-Host "[NON-COMPLIANT] Account lockout threshold is not properly configured." -ForegroundColor Red
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# NOTES
+# ================================
+
+Write-Host "Note:"
+Write-Host "- This setting works with account lockout duration and lockout observation window."
+Write-Host "- A value of 0 disables account lockout and is non-compliant."
+Write-Host "- A Group Policy refresh may be required in managed environments."
