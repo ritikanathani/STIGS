@@ -1,0 +1,97 @@
+<#
+.SYNOPSIS
+    This PowerShell script ensures that the minimum password age is configured to at least 1 day on Windows 11 systems.
+
+.DESCRIPTION
+    Configuring a minimum password age of at least 1 day prevents users from immediately changing passwords multiple times in order to bypass password history requirements. This strengthens password policy enforcement and supports compliance with Windows 11 STIG requirements.
+
+.NOTES
+    Author          : Ritika Nathani
+    Version         : 1.0
+    CVEs            : N/A
+    Plugin IDs      : N/A
+    STIG-ID         : WN11-AC-000030
+
+.TESTED ON
+    Date(s) Tested  : 04-07-2026
+    Tested By       : Ritika Nathani
+    Systems Tested  : Windows 11
+    PowerShell Ver. : 5.1+
+
+.USAGE
+    Run this script in an elevated PowerShell session.
+    Example:
+    PS C:\> .\STIG-ID-WN11-AC-000030.ps1
+#>
+
+# ================================
+# ADMIN PRIVILEGE CHECK
+# ================================
+
+if (-not ([Security.Principal.WindowsPrincipal] `
+[Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
+[Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Write-Host "Please run this script as Administrator." -ForegroundColor Red
+    exit
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# PRE-REMEDIATION CHECK
+# ================================
+
+Write-Host "Checking minimum password age..."
+
+$accountsOutput = net accounts
+$minPasswordAgeLine = $accountsOutput | Select-String "Minimum password age"
+$minPasswordAge = [int](($minPasswordAgeLine -split ":")[1].Trim())
+
+Write-Host "Current Minimum Password Age (days):" $minPasswordAge
+
+Write-Host "----------------------------------------"
+
+# ================================
+# REMEDIATION
+# ================================
+
+Write-Host "Configuring minimum password age to 1 day..."
+
+net accounts /minpwage:1 | Out-Null
+
+Write-Host "----------------------------------------"
+
+# ================================
+# POST-REMEDIATION VERIFICATION
+# ================================
+
+Write-Host "Verifying configuration..."
+
+$updatedAccountsOutput = net accounts
+$updatedMinPasswordAgeLine = $updatedAccountsOutput | Select-String "Minimum password age"
+$updatedMinPasswordAge = [int](($updatedMinPasswordAgeLine -split ":")[1].Trim())
+
+Write-Host "Updated Minimum Password Age (days):" $updatedMinPasswordAge
+
+Write-Host "----------------------------------------"
+
+# ================================
+# RESULT
+# ================================
+
+if ($updatedMinPasswordAge -ge 1) {
+    Write-Host "[COMPLIANT] Minimum password age is configured to 1 day or greater." -ForegroundColor Green
+} else {
+    Write-Host "[NON-COMPLIANT] Minimum password age is not properly configured." -ForegroundColor Red
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# NOTES
+# ================================
+
+Write-Host "Note:"
+Write-Host "- This setting works together with password history and maximum password age."
+Write-Host "- A value of 0 is non-compliant."
+Write-Host "- A Group Policy refresh may be required in managed environments."
