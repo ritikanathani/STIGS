@@ -1,0 +1,112 @@
+<#
+.SYNOPSIS
+    This PowerShell script ensures that the Windows SMB client is configured to always perform SMB packet signing on Windows 11 systems.
+
+.DESCRIPTION
+    Requiring SMB packet signing on the client helps protect SMB communications against tampering, spoofing, and man-in-the-middle attacks. This strengthens network session integrity and supports compliance with Windows 11 STIG requirements.
+
+.NOTES
+    Author          : Ritika Nathani
+    Version         : 1.0
+    CVEs            : N/A
+    Plugin IDs      : N/A
+    STIG-ID         : WN11-SO-000100
+
+.TESTED ON
+    Date(s) Tested  : 04-07-2026
+    Tested By       : Ritika Nathani
+    Systems Tested  : Windows 11
+    PowerShell Ver. : 5.1+
+
+.USAGE
+    Run this script in an elevated PowerShell session.
+    Example:
+    PS C:\> .\STIG-ID-WN11-SO-000100.ps1
+#>
+
+# ================================
+# ADMIN PRIVILEGE CHECK
+# ================================
+
+if (-not ([Security.Principal.WindowsPrincipal] `
+[Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
+[Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Write-Host "Please run this script as Administrator." -ForegroundColor Red
+    exit
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# PRE-REMEDIATION CHECK
+# ================================
+
+Write-Host "Checking SMB client signing configuration..."
+
+try {
+    $smbClientConfig = Get-SmbClientConfiguration
+    $currentRequireSignature = $smbClientConfig.RequireSecuritySignature
+    Write-Host "Current RequireSecuritySignature:" $currentRequireSignature
+}
+catch {
+    Write-Host "Failed to retrieve SMB client configuration." -ForegroundColor Red
+    exit
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# REMEDIATION
+# ================================
+
+Write-Host "Enforcing SMB client packet signing..."
+
+try {
+    Set-SmbClientConfiguration -RequireSecuritySignature $true -Force | Out-Null
+}
+catch {
+    Write-Host "Failed to configure SMB client packet signing." -ForegroundColor Red
+    exit
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# POST-REMEDIATION VERIFICATION
+# ================================
+
+Write-Host "Verifying configuration..."
+
+try {
+    $updatedSmbClientConfig = Get-SmbClientConfiguration
+    $updatedRequireSignature = $updatedSmbClientConfig.RequireSecuritySignature
+    Write-Host "Updated RequireSecuritySignature:" $updatedRequireSignature
+}
+catch {
+    Write-Host "Failed to verify SMB client configuration." -ForegroundColor Red
+    exit
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# RESULT
+# ================================
+
+if ($updatedRequireSignature -eq $true) {
+    Write-Host "[COMPLIANT] SMB client is configured to always perform packet signing." -ForegroundColor Green
+} else {
+    Write-Host "[NON-COMPLIANT] SMB client packet signing is not properly configured." -ForegroundColor Red
+}
+
+Write-Host "----------------------------------------"
+
+# ================================
+# NOTES
+# ================================
+
+Write-Host "Note:"
+Write-Host "- RequireSecuritySignature must be set to True for compliance."
+Write-Host "- This setting works together with SMB server signing controls."
+Write-Host "- Legacy systems that do not support SMB signing may experience connectivity issues."
+Write-Host "- A restart is typically not required, but policy refresh may be needed in managed environments."
